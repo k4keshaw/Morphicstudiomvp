@@ -1,7 +1,8 @@
+import { useState, useRef, useEffect } from "react";
 import { Link } from "react-router";
 import { Button } from "../components/ui/button";
 import { Slider } from "../components/ui/slider";
-import { Label } from "../components/ui/label";
+import { Textarea } from "../components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -9,415 +10,897 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import {
   Download,
   Play,
-  Pause,
-  Volume2,
-  Share2,
   ZoomIn,
   ZoomOut,
-  Scissors,
-  Plus,
   Lock,
+  Sparkles,
+  Video,
+  Image as ImageIcon,
+  X,
+  MousePointer,
+  Hand,
+  Save,
+  Film,
   Eye,
+  EyeOff,
+  Layers,
+  Droplets,
+  Move,
+  Pause,
   SkipBack,
   SkipForward,
+  ArrowRight,
+  Settings,
 } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
 
-const timelineClips = [
-  { id: 1, title: "Scene 1", start: 0, duration: 8, track: "video" },
-  { id: 2, title: "Scene 2", start: 8, duration: 6, track: "video" },
-  { id: 3, title: "Scene 3", start: 14, duration: 7, track: "video" },
-  { id: 4, title: "Scene 4", start: 21, duration: 5, track: "video" },
-  { id: 5, title: "Scene 5", start: 26, duration: 4, track: "video" },
+interface SceneNode {
+  id: string;
+  type: 'scene';
+  title: string;
+  description: string;
+  scriptContent: string;
+  duration: number;
+  position: { x: number; y: number };
+  sceneNumber: number;
+  thumbnail: string;
+  hasImage: boolean;
+  hasVideo: boolean;
+  opacity: number;
+  scale: number;
+  rotation: number;
+  positionX: number;
+  positionY: number;
+  blur: number;
+  brightness: number;
+  contrast: number;
+  saturation: number;
+  visible: boolean;
+  locked: boolean;
+}
+
+type CanvasNode = SceneNode;
+
+const initialNodes: CanvasNode[] = [
+  {
+    id: 'scene-1',
+    type: 'scene',
+    sceneNumber: 1,
+    title: "Command Center",
+    description: "Wide establishing shot of futuristic space station",
+    scriptContent: "INT. SPACE STATION - COMMAND CENTER - DAY\n\nThe vast command center hums with activity. Holographic displays flicker with data streams.",
+    duration: 8,
+    position: { x: 100, y: 150 },
+    thumbnail: "https://images.unsplash.com/photo-1618172193622-ae2d025f4032?w=400",
+    hasImage: true,
+    hasVideo: true,
+    opacity: 100,
+    scale: 100,
+    rotation: 0,
+    positionX: 0,
+    positionY: 0,
+    blur: 0,
+    brightness: 100,
+    contrast: 100,
+    saturation: 100,
+    visible: true,
+    locked: false,
+  },
+  {
+    id: 'scene-2',
+    type: 'scene',
+    sceneNumber: 2,
+    title: "Sarah at Console",
+    description: "Close-up of Commander Sarah Chen studying readings",
+    scriptContent: "COMMANDER SARAH CHEN stands at the central console.\n\nSARAH\n(to herself)\nThis doesn't make any sense...",
+    duration: 6,
+    position: { x: 500, y: 150 },
+    thumbnail: "https://images.unsplash.com/photo-1618172193622-ae2d025f4032?w=400",
+    hasImage: true,
+    hasVideo: false,
+    opacity: 100,
+    scale: 100,
+    rotation: 0,
+    positionX: 0,
+    positionY: 0,
+    blur: 0,
+    brightness: 100,
+    contrast: 100,
+    saturation: 100,
+    visible: true,
+    locked: false,
+  },
+  {
+    id: 'scene-3',
+    type: 'scene',
+    sceneNumber: 3,
+    title: "Marcus Arrives",
+    description: "Tech Officer Marcus rushes over with tablet",
+    scriptContent: "TECH OFFICER MARCUS rushes over.\n\nMARCUS\nCommander, you need to see this.",
+    duration: 7,
+    position: { x: 900, y: 150 },
+    thumbnail: "https://images.unsplash.com/photo-1618172193622-ae2d025f4032?w=400",
+    hasImage: false,
+    hasVideo: false,
+    opacity: 100,
+    scale: 100,
+    rotation: 0,
+    positionX: 0,
+    positionY: 0,
+    blur: 0,
+    brightness: 100,
+    contrast: 100,
+    saturation: 100,
+    visible: true,
+    locked: false,
+  },
 ];
 
 export function VideoEditor() {
-  const totalDuration = 30; // seconds
-  const timeMarkers = Array.from({ length: 31 }, (_, i) => i);
-  const [playheadPosition, setPlayheadPosition] = useState(43); // percentage
+  const [nodes, setNodes] = useState<CanvasNode[]>(initialNodes);
+  const [selectedNode, setSelectedNode] = useState<CanvasNode | null>(null);
+  const [tool, setTool] = useState<'select' | 'pan'>('select');
+  const [zoom, setZoom] = useState(100);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [draggingNode, setDraggingNode] = useState<string | null>(null);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const [showExportModal, setShowExportModal] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const timelineRef = useRef<HTMLDivElement>(null);
-  const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
+  const canvasRef = useRef<HTMLDivElement>(null);
 
-  const currentTime = (playheadPosition / 100) * totalDuration;
-
-  const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!timelineRef.current) return;
-    const rect = timelineRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const percentage = (x / rect.width) * 100;
-    setPlayheadPosition(Math.max(0, Math.min(100, percentage)));
-  };
-
-  const handlePlayheadMouseDown = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsDraggingPlayhead(true);
-  };
-
+  // Ctrl+Scroll Zoom
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDraggingPlayhead || !timelineRef.current) return;
-      const rect = timelineRef.current.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const percentage = (x / rect.width) * 100;
-      setPlayheadPosition(Math.max(0, Math.min(100, percentage)));
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -25 : 25;
+        setZoom(prev => Math.max(25, Math.min(200, prev + delta)));
+      }
     };
 
-    const handleMouseUp = () => {
-      setIsDraggingPlayhead(false);
-    };
-
-    if (isDraggingPlayhead) {
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
+    const canvas = canvasRef.current;
+    if (canvas) {
+      canvas.addEventListener('wheel', handleWheel, { passive: false });
+      return () => canvas.removeEventListener('wheel', handleWheel);
     }
+  }, []);
 
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
+  const handleMouseDown = (e: React.MouseEvent, nodeId: string) => {
+    if (tool === 'select') {
+      e.stopPropagation();
+      const node = nodes.find(n => n.id === nodeId);
+      if (node) {
+        setSelectedNode(node);
+        setDraggingNode(nodeId);
+        setDragOffset({
+          x: e.clientX - node.position.x * (zoom / 100) - pan.x,
+          y: e.clientY - node.position.y * (zoom / 100) - pan.y,
+        });
+      }
+    }
+  };
+
+  const handleCanvasMouseDown = (e: React.MouseEvent) => {
+    if (tool === 'pan' || e.button === 1) {
+      setIsPanning(true);
+      setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+    } else {
+      setSelectedNode(null);
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (draggingNode && tool === 'select') {
+      const node = nodes.find(n => n.id === draggingNode);
+      if (node) {
+        const newX = (e.clientX - pan.x - dragOffset.x) / (zoom / 100);
+        const newY = (e.clientY - pan.y - dragOffset.y) / (zoom / 100);
+        
+        setNodes(nodes.map(n => 
+          n.id === draggingNode 
+            ? { ...n, position: { x: newX, y: newY } }
+            : n
+        ));
+      }
+    } else if (isPanning) {
+      setPan({
+        x: e.clientX - panStart.x,
+        y: e.clientY - panStart.y,
+      });
+    }
+  };
+
+  const handleMouseUp = () => {
+    setDraggingNode(null);
+    setIsPanning(false);
+  };
+
+  const addSceneNode = () => {
+    const maxScene = Math.max(...nodes.map(n => n.sceneNumber), 0);
+    const newScene: SceneNode = {
+      id: `scene-${Date.now()}`,
+      type: 'scene',
+      sceneNumber: maxScene + 1,
+      title: `Scene ${maxScene + 1}`,
+      description: "New scene description...",
+      scriptContent: "NEW SCENE\n\nScene content from script editor...",
+      duration: 5,
+      position: { x: 100 + nodes.length * 400, y: 150 },
+      thumbnail: "https://images.unsplash.com/photo-1618172193622-ae2d025f4032?w=400",
+      hasImage: false,
+      hasVideo: false,
+      opacity: 100,
+      scale: 100,
+      rotation: 0,
+      positionX: 0,
+      positionY: 0,
+      blur: 0,
+      brightness: 100,
+      contrast: 100,
+      saturation: 100,
+      visible: true,
+      locked: false,
     };
-  }, [isDraggingPlayhead]);
+    setNodes([...nodes, newScene]);
+  };
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    const ms = Math.floor((seconds % 1) * 10);
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}.${ms}`;
+  const updateNodeProperty = <K extends keyof SceneNode>(
+    nodeId: string,
+    property: K,
+    value: SceneNode[K]
+  ) => {
+    setNodes(nodes.map(n => 
+      n.id === nodeId ? { ...n, [property]: value } : n
+    ));
+    if (selectedNode?.id === nodeId) {
+      setSelectedNode({ ...selectedNode, [property]: value } as SceneNode);
+    }
   };
 
   return (
     <div className="h-full flex flex-col bg-[#0f0f0f]">
-      {/* Header */}
-      <div className="border-b border-white/5 p-3 flex items-center justify-between bg-[#1a1a1a]">
-        <div className="flex items-center gap-3">
-          <h1 className="text-lg font-bold">Video Editor</h1>
-          <div className="h-3.5 w-px bg-white/10" />
-          <span className="text-sm text-gray-500">Sci-Fi Adventure</span>
+      {/* Top Toolbar */}
+      <div className="h-14 border-b border-white/10 bg-[#1a1a1a] flex items-center justify-between px-4">
+        <div className="flex items-center gap-4">
+          <h1 className="text-sm font-semibold">Video Timeline</h1>
+          <div className="h-4 w-px bg-white/10" />
+          <span className="text-xs text-gray-500">Sci-Fi Adventure</span>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="h-8 text-xs">
-            <Share2 className="w-3.5 h-3.5 mr-2" />
-            Share
-          </Button>
-          <Link to="/exports">
-            <Button size="sm" className="bg-white text-black hover:bg-gray-200 h-8 text-xs">
-              <Download className="w-3.5 h-3.5 mr-2" />
-              Export
-            </Button>
-          </Link>
+
+        {/* Minimal Icon Toolbar */}
+        <div className="flex items-center gap-1">
+          {/* Tool Selection */}
+          <div className="flex items-center gap-0.5 bg-black/30 rounded-lg p-1 mr-2">
+            <button
+              onClick={() => setTool('select')}
+              className={`p-2 rounded transition-all ${
+                tool === 'select' ? 'bg-white text-black' : 'text-gray-400 hover:text-white'
+              }`}
+              title="Select (V)"
+            >
+              <MousePointer className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setTool('pan')}
+              className={`p-2 rounded transition-all ${
+                tool === 'pan' ? 'bg-white text-black' : 'text-gray-400 hover:text-white'
+              }`}
+              title="Pan (H)"
+            >
+              <Hand className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Add Scene */}
+          <button
+            onClick={addSceneNode}
+            className="p-2 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+            title="Add Scene"
+          >
+            <Film className="w-4 h-4" />
+          </button>
+
+          <div className="w-px h-6 bg-white/10 mx-1" />
+
+          {/* Actions */}
+          <button
+            className="p-2 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+            title="Save"
+          >
+            <Save className="w-4 h-4" />
+          </button>
+          
+          <button
+            onClick={() => setShowExportModal(true)}
+            className="px-3 py-2 rounded bg-white text-black hover:bg-gray-200 text-xs font-medium transition-colors flex items-center gap-2"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Export
+          </button>
         </div>
       </div>
 
+      {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Main Content */}
+        {/* Left Side - Canvas */}
         <div className="flex-1 flex flex-col">
-          {/* Video Preview */}
-          <div className="flex-1 flex items-center justify-center p-6 bg-[#0f0f0f]">
-            <div className="w-full max-w-4xl">
-              <div className="aspect-video bg-black rounded overflow-hidden">
-                <div className="w-full h-full relative">
-                  <img
-                    src="https://images.unsplash.com/photo-1451187580459-43490279c0fa"
-                    alt="Video preview"
-                    className="w-full h-full object-cover"
-                  />
-                  {/* Playhead Time */}
-                  <div className="absolute top-3 right-3 bg-black/90 px-2.5 py-1 rounded text-xs font-mono text-white">
-                    {formatTime(currentTime)}
-                  </div>
+          {/* Video Preview Window */}
+          <div className="h-64 border-b border-white/10 bg-black flex items-center justify-center relative">
+            {selectedNode && selectedNode.hasVideo ? (
+              <img 
+                src={selectedNode.thumbnail} 
+                alt="Preview" 
+                className="max-h-full max-w-full object-contain"
+                style={{
+                  opacity: selectedNode.opacity / 100,
+                  transform: `scale(${selectedNode.scale / 100}) rotate(${selectedNode.rotation}deg)`,
+                  filter: `blur(${selectedNode.blur}px) brightness(${selectedNode.brightness}%) contrast(${selectedNode.contrast}%) saturate(${selectedNode.saturation}%)`,
+                }}
+              />
+            ) : (
+              <div className="text-center">
+                <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-3">
+                  <Film className="w-8 h-8 text-gray-600" />
                 </div>
+                <p className="text-sm text-gray-600">Select a scene to preview</p>
               </div>
+            )}
 
-              {/* Playback Controls */}
-              <div className="mt-3 bg-[#1a1a1a] rounded p-3">
-                <div className="flex items-center gap-3">
-                  <Button variant="ghost" size="sm" className="rounded-full h-7 w-7 p-0">
-                    <SkipBack className="w-3.5 h-3.5" />
-                  </Button>
-                  <Button className="rounded-full bg-white text-black hover:bg-gray-200 h-9 w-9 p-0">
-                    <Play className="w-4 h-4 ml-0.5" />
-                  </Button>
-                  <Button variant="ghost" size="sm" className="rounded-full h-7 w-7 p-0">
-                    <SkipForward className="w-3.5 h-3.5" />
-                  </Button>
-                  <div className="flex-1">
-                    <Slider defaultValue={[43]} max={100} className="py-2" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Volume2 className="w-3.5 h-3.5 text-gray-500" />
-                    <Slider defaultValue={[80]} max={100} className="w-20 py-2" />
-                  </div>
-                  <div className="text-xs font-mono text-gray-500">
-                    {formatTime(currentTime)} / {formatTime(totalDuration)}
-                  </div>
-                </div>
-              </div>
+            {/* Preview Controls */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-sm rounded-lg px-4 py-2 flex items-center gap-3">
+              <button className="p-1.5 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
+                <SkipBack className="w-4 h-4" />
+              </button>
+              <button 
+                onClick={() => setIsPlaying(!isPlaying)}
+                className="p-2 rounded-full bg-white hover:bg-gray-200 text-black transition-colors"
+              >
+                {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+              </button>
+              <button className="p-1.5 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
+                <SkipForward className="w-4 h-4" />
+              </button>
+              <div className="h-4 w-px bg-white/20 mx-1" />
+              <span className="text-xs text-gray-400 font-mono">00:00 / 00:21</span>
             </div>
           </div>
 
-          {/* Timeline - Premiere Pro Style */}
-          <div className="h-80 border-t border-white/5 flex flex-col bg-[#1a1a1a]">
-            {/* Timeline Toolbar */}
-            <div className="flex items-center justify-between px-3 py-1.5 border-b border-white/5 bg-[#1a1a1a]">
-              <div className="flex items-center gap-0.5">
-                <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                  <Scissors className="w-3.5 h-3.5" />
-                </Button>
-                <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                  <Plus className="w-3.5 h-3.5" />
-                </Button>
-                <div className="w-px h-4 bg-white/10 mx-1.5" />
-                <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                  <ZoomOut className="w-3.5 h-3.5" />
-                </Button>
-                <Slider defaultValue={[50]} max={100} className="w-20 py-2" />
-                <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                  <ZoomIn className="w-3.5 h-3.5" />
-                </Button>
+          {/* Canvas Timeline Area */}
+          <div className="flex-1 relative">
+            {/* Zoom Slider - Left Corner */}
+            <div className="absolute left-4 top-4 z-20 bg-[#1a1a1a] border border-white/10 rounded-lg p-3 flex flex-col items-center gap-2">
+              <button
+                onClick={() => setZoom(Math.min(200, zoom + 25))}
+                className="p-1.5 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+              >
+                <ZoomIn className="w-4 h-4" />
+              </button>
+              
+              <div className="h-24 flex items-center">
+                <input
+                  type="range"
+                  min="25"
+                  max="200"
+                  step="25"
+                  value={zoom}
+                  onChange={(e) => setZoom(Number(e.target.value))}
+                  className="w-24 -rotate-90"
+                  style={{
+                    appearance: 'none',
+                    background: 'transparent',
+                  }}
+                />
               </div>
-              <div className="text-xs font-mono text-gray-600">
-                60 FPS • 1920x1080
-              </div>
+              
+              <button
+                onClick={() => setZoom(Math.max(25, zoom - 25))}
+                className="p-1.5 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+              >
+                <ZoomOut className="w-4 h-4" />
+              </button>
+              
+              <span className="text-xs text-gray-500 font-mono mt-1">{zoom}%</span>
             </div>
 
-            {/* Timeline Tracks */}
-            <div className="flex-1 flex overflow-hidden">
-              {/* Track Headers */}
-              <div className="w-36 border-r border-white/5 bg-[#1a1a1a] overflow-y-auto">
-                {/* Video Tracks */}
-                <div>
-                  <div className="h-16 px-2 py-1.5 flex items-center justify-between border-b border-white/5">
-                    <div className="flex items-center gap-2">
-                      <div className="flex gap-0.5">
-                        <button className="w-4 h-4 rounded bg-white/10 hover:bg-white/20 flex items-center justify-center">
-                          <Eye className="w-2.5 h-2.5" />
-                        </button>
-                        <button className="w-4 h-4 rounded bg-white/10 hover:bg-white/20 flex items-center justify-center">
-                          <Lock className="w-2.5 h-2.5" />
-                        </button>
-                      </div>
-                      <div>
-                        <div className="text-xs font-semibold text-white">V1</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+            {/* Infinite Canvas */}
+            <div
+              ref={canvasRef}
+              className="w-full h-full relative overflow-hidden"
+              style={{
+                cursor: tool === 'pan' || isPanning ? 'grab' : 'default',
+                backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px)',
+                backgroundSize: `${20 * (zoom / 100)}px ${20 * (zoom / 100)}px`,
+                backgroundPosition: `${pan.x}px ${pan.y}px`,
+              }}
+              onMouseDown={handleCanvasMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+            >
+              {/* Arrow Connections Between Clips */}
+              {nodes.map((node, index) => {
+                if (index < nodes.length - 1) {
+                  const nextNode = nodes[index + 1];
+                  const startX = (node.position.x + 320) * (zoom / 100) + pan.x;
+                  const startY = (node.position.y + 140) * (zoom / 100) + pan.y;
+                  const endX = nextNode.position.x * (zoom / 100) + pan.x;
+                  const endY = (nextNode.position.y + 140) * (zoom / 100) + pan.y;
+                  
+                  return (
+                    <svg key={`arrow-${node.id}`} className="absolute top-0 left-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }}>
+                      <defs>
+                        <marker
+                          id={`arrowhead-${index}`}
+                          markerWidth="10"
+                          markerHeight="10"
+                          refX="9"
+                          refY="3"
+                          orient="auto"
+                        >
+                          <polygon
+                            points="0 0, 10 3, 0 6"
+                            fill="rgba(255,255,255,0.3)"
+                          />
+                        </marker>
+                      </defs>
+                      <line
+                        x1={startX}
+                        y1={startY}
+                        x2={endX}
+                        y2={endY}
+                        stroke="rgba(255,255,255,0.3)"
+                        strokeWidth="2"
+                        markerEnd={`url(#arrowhead-${index})`}
+                      />
+                    </svg>
+                  );
+                }
+                return null;
+              })}
 
-                {/* Audio Tracks */}
-                <div>
-                  <div className="h-12 px-2 py-1.5 flex items-center justify-between border-b border-white/5">
-                    <div className="flex items-center gap-2">
-                      <div className="flex gap-0.5">
-                        <button className="w-4 h-4 rounded bg-white/10 hover:bg-white/20 flex items-center justify-center">
-                          <Eye className="w-2.5 h-2.5" />
-                        </button>
-                        <button className="w-4 h-4 rounded bg-white/10 hover:bg-white/20 flex items-center justify-center">
-                          <Lock className="w-2.5 h-2.5" />
-                        </button>
-                      </div>
-                      <div>
-                        <div className="text-xs font-semibold text-cyan-400">A1</div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="h-12 px-2 py-1.5 flex items-center justify-between border-b border-white/5">
-                    <div className="flex items-center gap-2">
-                      <div className="flex gap-0.5">
-                        <button className="w-4 h-4 rounded bg-white/10 hover:bg-white/20 flex items-center justify-center">
-                          <Eye className="w-2.5 h-2.5" />
-                        </button>
-                        <button className="w-4 h-4 rounded bg-white/10 hover:bg-white/20 flex items-center justify-center">
-                          <Lock className="w-2.5 h-2.5" />
-                        </button>
-                      </div>
-                      <div>
-                        <div className="text-xs font-semibold text-green-400">A2</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              {/* Scene Nodes */}
+              {nodes.map((node, index) => {
+                const transform = `translate(${node.position.x * (zoom / 100) + pan.x}px, ${node.position.y * (zoom / 100) + pan.y}px) scale(${zoom / 100})`;
+                const isSelected = selectedNode?.id === node.id;
 
-              {/* Timeline Canvas */}
-              <div className="flex-1 overflow-auto bg-[#0f0f0f]">
-                <div
-                  ref={timelineRef}
-                  className="relative cursor-pointer"
-                  style={{ minWidth: '1200px' }}
-                  onClick={handleTimelineClick}
-                >
-                  {/* Timeline Ruler */}
-                  <div className="h-7 bg-[#1a1a1a] border-b border-white/5 relative">
-                    {timeMarkers.map((time) => (
-                      <div
-                        key={time}
-                        className="absolute top-0 bottom-0 flex flex-col"
-                        style={{ left: `${(time / totalDuration) * 100}%` }}
-                      >
-                        <div className="w-px h-1.5 bg-white/20" />
-                        <span className="text-xs text-gray-600 ml-0.5 mt-0.5">
-                          {time}s
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Video Track V1 */}
-                  <div className="h-16 border-b border-white/5 relative">
-                    {timelineClips.map((clip) => (
-                      <div
-                        key={clip.id}
-                        className="absolute top-0.5 bottom-0.5 rounded bg-gradient-to-r from-gray-600 to-gray-700 border border-gray-500 hover:border-white/50 cursor-move group transition-all"
-                        style={{
-                          left: `${(clip.start / totalDuration) * 100}%`,
-                          width: `${(clip.duration / totalDuration) * 100}%`,
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <div className="h-full flex items-center px-2">
-                          <span className="text-xs font-medium text-white truncate">
-                            {clip.title}
-                          </span>
-                        </div>
-                        {/* Resize handles */}
-                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-white/0 group-hover:bg-white/50 cursor-ew-resize" />
-                        <div className="absolute right-0 top-0 bottom-0 w-1 bg-white/0 group-hover:bg-white/50 cursor-ew-resize" />
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Audio Track A1 - Voiceover */}
-                  <div className="h-12 border-b border-white/5 relative">
-                    <div
-                      className="absolute top-0.5 bottom-0.5 rounded bg-cyan-900/50 border border-cyan-700/50 hover:border-cyan-500 cursor-move"
-                      style={{ left: '0%', width: '100%' }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="h-full flex items-center px-1">
-                        <div className="flex-1 h-full flex items-center gap-0.5">
-                          {/* Audio waveform simulation */}
-                          {Array.from({ length: 100 }).map((_, i) => (
-                            <div
-                              key={i}
-                              className="flex-1 bg-cyan-400/40"
-                              style={{
-                                height: `${Math.random() * 60 + 20}%`,
-                              }}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Audio Track A2 - Music */}
-                  <div className="h-12 border-b border-white/5 relative">
-                    <div
-                      className="absolute top-0.5 bottom-0.5 rounded bg-green-900/50 border border-green-700/50 hover:border-green-500 cursor-move"
-                      style={{ left: '0%', width: '100%' }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="h-full flex items-center px-1">
-                        <div className="flex-1 h-full flex items-center gap-0.5">
-                          {/* Audio waveform simulation */}
-                          {Array.from({ length: 100 }).map((_, i) => (
-                            <div
-                              key={i}
-                              className="flex-1 bg-green-400/40"
-                              style={{
-                                height: `${Math.random() * 40 + 10}%`,
-                              }}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Playhead */}
+                return (
                   <div
-                    className="absolute top-0 bottom-0 w-0.5 bg-white z-20"
-                    style={{ left: `${playheadPosition}%`, pointerEvents: 'none' }}
+                    key={node.id}
+                    className={`absolute top-0 left-0 transition-all ${
+                      isSelected ? 'z-10' : 'z-0'
+                    }`}
+                    style={{ 
+                      transform, 
+                      transformOrigin: 'top left',
+                      opacity: node.visible ? 1 : 0.3,
+                    }}
+                    onMouseDown={(e) => handleMouseDown(e, node.id)}
                   >
-                    <div
-                      className="absolute -top-1 -left-1.5 w-3 h-3 bg-white rounded-sm cursor-grab active:cursor-grabbing"
-                      style={{ pointerEvents: 'auto' }}
-                      onMouseDown={handlePlayheadMouseDown}
-                    />
+                    {/* Scene Storyboard Card */}
+                    <div className={`w-80 bg-[#1a1a1a] rounded-lg border-2 overflow-hidden cursor-move ${
+                      isSelected ? 'border-white shadow-lg shadow-white/20' : 'border-white/20 hover:border-white/40'
+                    } ${node.locked ? 'opacity-75' : ''}`}>
+                      {/* Script Reference - Inside Card at Top */}
+                      <div className="bg-black/40 border-b border-white/10 px-3 py-2">
+                        <p className="text-xs text-gray-400 font-mono leading-tight line-clamp-2">
+                          {node.scriptContent}
+                        </p>
+                      </div>
+
+                      {/* Storyboard Sketch Frame */}
+                      <div className="h-44 bg-black relative overflow-hidden border-b border-white/10">
+                        {/* Sketch Image */}
+                        <img
+                          src={node.thumbnail}
+                          alt={node.title}
+                          className="w-full h-full object-cover grayscale opacity-80"
+                          style={{
+                            filter: `blur(${node.blur}px) brightness(${node.brightness}%) contrast(${node.contrast}%) saturate(${node.saturation}%)`,
+                          }}
+                        />
+                        
+                        {/* Overlay Text */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
+                        <div className="absolute bottom-2 left-2 right-2">
+                          <p className="text-xs text-white/90 font-medium leading-tight line-clamp-1">
+                            {node.description}
+                          </p>
+                        </div>
+                        
+                        {/* Frame Number Badge */}
+                        <div className="absolute top-2 right-2 bg-black/80 backdrop-blur-sm px-2 py-1 rounded text-xs font-mono text-white/70">
+                          #{node.sceneNumber}
+                        </div>
+
+                        {/* Layer Status Icons */}
+                        <div className="absolute top-2 left-2 flex gap-1">
+                          {!node.visible && (
+                            <div className="w-6 h-6 rounded bg-white/10 backdrop-blur-sm flex items-center justify-center">
+                              <EyeOff className="w-3.5 h-3.5 text-gray-400" />
+                            </div>
+                          )}
+                          {node.locked && (
+                            <div className="w-6 h-6 rounded bg-white/10 backdrop-blur-sm flex items-center justify-center">
+                              <Lock className="w-3.5 h-3.5 text-gray-400" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Info Footer */}
+                      <div className="px-3 py-2 bg-[#1a1a1a]">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-white truncate">
+                              {node.title}
+                            </p>
+                            <p className="text-xs text-gray-500">{node.duration}s</p>
+                          </div>
+                        </div>
+
+                        {/* Status Indicators */}
+                        <div className="flex items-center gap-2 text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <div className={`w-2 h-2 rounded-full ${node.hasImage ? 'bg-green-500' : 'bg-gray-600'}`} />
+                            <span className="text-gray-500">Image</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <div className={`w-2 h-2 rounded-full ${node.hasVideo ? 'bg-blue-500' : 'bg-gray-600'}`} />
+                            <span className="text-gray-500">Video</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                );
+              })}
             </div>
           </div>
         </div>
 
-        {/* Right Panel - Effects & Audio */}
-        <aside className="w-72 border-l border-white/5 overflow-auto bg-[#1a1a1a]">
-          <Tabs defaultValue="transitions" className="h-full flex flex-col">
-            <TabsList className="grid grid-cols-2 m-3 bg-white/5">
-              <TabsTrigger value="transitions" className="text-xs">Transitions</TabsTrigger>
-              <TabsTrigger value="audio" className="text-xs">Audio</TabsTrigger>
-            </TabsList>
+        {/* Right Panel - Video Properties */}
+        {selectedNode && (
+          <aside className="w-80 border-l border-white/10 bg-[#1a1a1a] overflow-auto">
+            <div className="p-4 border-b border-white/10 flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Video Properties</h3>
+              <button
+                onClick={() => setSelectedNode(null)}
+                className="p-1 rounded hover:bg-white/10 text-gray-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-            <TabsContent value="transitions" className="flex-1 px-3 pb-3 space-y-3">
-              <div className="space-y-2">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase">Transition Type</h3>
-                <Select defaultValue="fade">
-                  <SelectTrigger className="bg-white/5 border-white/10 h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="fade">Fade</SelectItem>
-                    <SelectItem value="dissolve">Dissolve</SelectItem>
-                    <SelectItem value="wipe">Wipe</SelectItem>
-                    <SelectItem value="cut">Hard Cut</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs">Duration</Label>
-                  <span className="text-xs text-gray-500">0.5s</span>
+            <div className="p-4 space-y-6">
+              {/* Layer Controls */}
+              <div>
+                <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Layers className="w-3.5 h-3.5" />
+                  Layer
+                </h4>
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => updateNodeProperty(selectedNode.id, 'visible', !selectedNode.visible)}
+                      className={`flex-1 p-2 rounded text-xs flex items-center justify-center gap-1.5 transition-colors ${
+                        selectedNode.visible 
+                          ? 'bg-white/10 text-white hover:bg-white/15' 
+                          : 'bg-white/5 text-gray-500 hover:bg-white/10'
+                      }`}
+                    >
+                      {selectedNode.visible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                      {selectedNode.visible ? 'Visible' : 'Hidden'}
+                    </button>
+                    <button
+                      onClick={() => updateNodeProperty(selectedNode.id, 'locked', !selectedNode.locked)}
+                      className={`flex-1 p-2 rounded text-xs flex items-center justify-center gap-1.5 transition-colors ${
+                        selectedNode.locked 
+                          ? 'bg-white/10 text-white hover:bg-white/15' 
+                          : 'bg-white/5 text-gray-500 hover:bg-white/10'
+                      }`}
+                    >
+                      <Lock className="w-3.5 h-3.5" />
+                      {selectedNode.locked ? 'Locked' : 'Unlocked'}
+                    </button>
+                  </div>
                 </div>
-                <Slider defaultValue={[5]} max={20} step={1} className="py-3" />
               </div>
 
-              <div className="space-y-1.5 pt-2">
-                <h4 className="text-xs font-semibold text-gray-500 uppercase">Presets</h4>
-                {["Cinematic Fade", "Quick Cut", "Smooth Dissolve"].map((preset) => (
-                  <button
-                    key={preset}
-                    className="w-full p-2.5 rounded bg-white/5 hover:bg-white/10 text-left text-xs transition-colors"
-                  >
-                    {preset}
-                  </button>
-                ))}
-              </div>
-            </TabsContent>
+              {/* Transform */}
+              <div>
+                <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Move className="w-3.5 h-3.5" />
+                  Transform
+                </h4>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs text-gray-500 mb-2 block">Opacity</label>
+                    <Slider
+                      value={[selectedNode.opacity]}
+                      onValueChange={(val) => updateNodeProperty(selectedNode.id, 'opacity', val[0])}
+                      max={100}
+                      className="py-3"
+                    />
+                    <div className="text-xs text-gray-500 mt-1">{selectedNode.opacity}%</div>
+                  </div>
 
-            <TabsContent value="audio" className="flex-1 px-3 pb-3 space-y-3">
-              <div className="space-y-2">
-                <Label className="text-xs">Master Volume</Label>
-                <Slider defaultValue={[80]} max={100} className="py-3" />
+                  <div>
+                    <label className="text-xs text-gray-500 mb-2 block">Scale</label>
+                    <Slider
+                      value={[selectedNode.scale]}
+                      onValueChange={(val) => updateNodeProperty(selectedNode.id, 'scale', val[0])}
+                      min={10}
+                      max={200}
+                      className="py-3"
+                    />
+                    <div className="text-xs text-gray-500 mt-1">{selectedNode.scale}%</div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-gray-500 mb-2 block">Rotation</label>
+                    <Slider
+                      value={[selectedNode.rotation]}
+                      onValueChange={(val) => updateNodeProperty(selectedNode.id, 'rotation', val[0])}
+                      min={-180}
+                      max={180}
+                      className="py-3"
+                    />
+                    <div className="text-xs text-gray-500 mt-1">{selectedNode.rotation}°</div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-gray-500 mb-2 block">Position X</label>
+                      <input
+                        type="number"
+                        value={selectedNode.positionX}
+                        onChange={(e) => updateNodeProperty(selectedNode.id, 'positionX', Number(e.target.value))}
+                        className="w-full h-8 bg-white/5 border border-white/10 rounded px-2 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500 mb-2 block">Position Y</label>
+                      <input
+                        type="number"
+                        value={selectedNode.positionY}
+                        onChange={(e) => updateNodeProperty(selectedNode.id, 'positionY', Number(e.target.value))}
+                        className="w-full h-8 bg-white/5 border border-white/10 rounded px-2 text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label className="text-xs">Voiceover Volume</Label>
-                <Slider defaultValue={[90]} max={100} className="py-3" />
+              {/* Filters & Effects */}
+              <div>
+                <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Droplets className="w-3.5 h-3.5" />
+                  Filters & Effects
+                </h4>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs text-gray-500 mb-2 block">Blur</label>
+                    <Slider
+                      value={[selectedNode.blur]}
+                      onValueChange={(val) => updateNodeProperty(selectedNode.id, 'blur', val[0])}
+                      max={20}
+                      className="py-3"
+                    />
+                    <div className="text-xs text-gray-500 mt-1">{selectedNode.blur}px</div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-gray-500 mb-2 block">Brightness</label>
+                    <Slider
+                      value={[selectedNode.brightness]}
+                      onValueChange={(val) => updateNodeProperty(selectedNode.id, 'brightness', val[0])}
+                      min={0}
+                      max={200}
+                      className="py-3"
+                    />
+                    <div className="text-xs text-gray-500 mt-1">{selectedNode.brightness}%</div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-gray-500 mb-2 block">Contrast</label>
+                    <Slider
+                      value={[selectedNode.contrast]}
+                      onValueChange={(val) => updateNodeProperty(selectedNode.id, 'contrast', val[0])}
+                      min={0}
+                      max={200}
+                      className="py-3"
+                    />
+                    <div className="text-xs text-gray-500 mt-1">{selectedNode.contrast}%</div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-gray-500 mb-2 block">Saturation</label>
+                    <Slider
+                      value={[selectedNode.saturation]}
+                      onValueChange={(val) => updateNodeProperty(selectedNode.id, 'saturation', val[0])}
+                      min={0}
+                      max={200}
+                      className="py-3"
+                    />
+                    <div className="text-xs text-gray-500 mt-1">{selectedNode.saturation}%</div>
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label className="text-xs">Music Volume</Label>
-                <Slider defaultValue={[60]} max={100} className="py-3" />
+              {/* Script Reference */}
+              <div className="pt-4 border-t border-white/10">
+                <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+                  Script Reference
+                </h4>
+                <div className="bg-black/30 rounded-lg p-3 border border-white/10">
+                  <p className="text-xs text-gray-400 font-mono leading-relaxed whitespace-pre-wrap">
+                    {selectedNode.scriptContent}
+                  </p>
+                </div>
               </div>
-            </TabsContent>
-          </Tabs>
-        </aside>
+
+              {/* Generation Status */}
+              {(!selectedNode.hasImage || !selectedNode.hasVideo) && (
+                <div className="pt-4 border-t border-white/10">
+                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+                    Generation
+                  </h4>
+                  <div className="space-y-2">
+                    {!selectedNode.hasImage && (
+                      <Button className="w-full bg-blue-600 hover:bg-blue-700 h-9 text-xs">
+                        <ImageIcon className="w-3.5 h-3.5 mr-2" />
+                        Generate Image
+                      </Button>
+                    )}
+                    {selectedNode.hasImage && !selectedNode.hasVideo && (
+                      <Button className="w-full bg-purple-600 hover:bg-purple-700 h-9 text-xs">
+                        <Video className="w-3.5 h-3.5 mr-2" />
+                        Generate Video
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </aside>
+        )}
+      </div>
+
+      {/* Export Modal Overlay */}
+      {showExportModal && (
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-[#1a1a1a] rounded-lg border border-white/10 w-full max-w-2xl max-h-[90vh] overflow-auto">
+            {/* Header */}
+            <div className="p-6 border-b border-white/10 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold mb-1">Export Video</h2>
+                <p className="text-sm text-gray-500">Configure export settings</p>
+              </div>
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="p-2 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-6">
+              {/* Export Settings */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm text-gray-400 mb-2 block">Resolution</label>
+                  <Select defaultValue="1080p">
+                    <SelectTrigger className="bg-white/5 border-white/10">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="720p">720p HD</SelectItem>
+                      <SelectItem value="1080p">1080p Full HD</SelectItem>
+                      <SelectItem value="2k">2K Ultra HD</SelectItem>
+                      <SelectItem value="4k">4K Cinema</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-sm text-gray-400 mb-2 block">Frame Rate</label>
+                  <Select defaultValue="30">
+                    <SelectTrigger className="bg-white/5 border-white/10">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="24">24 fps (Cinematic)</SelectItem>
+                      <SelectItem value="30">30 fps (Standard)</SelectItem>
+                      <SelectItem value="60">60 fps (Smooth)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-sm text-gray-400 mb-2 block">Format</label>
+                  <Select defaultValue="mp4">
+                    <SelectTrigger className="bg-white/5 border-white/10">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="mp4">MP4 (H.264)</SelectItem>
+                      <SelectItem value="mov">MOV (ProRes)</SelectItem>
+                      <SelectItem value="webm">WebM</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-sm text-gray-400 mb-2 block">Quality</label>
+                  <Select defaultValue="high">
+                    <SelectTrigger className="bg-white/5 border-white/10">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low (Small File)</SelectItem>
+                      <SelectItem value="medium">Medium (Balanced)</SelectItem>
+                      <SelectItem value="high">High (Best Quality)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Export Preview */}
+              <div className="bg-black/30 rounded-lg p-4 border border-white/10">
+                <h3 className="text-sm font-semibold mb-3">Export Summary</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Total Duration</span>
+                    <span className="text-white font-mono">{nodes.reduce((acc, n) => acc + n.duration, 0)}s</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Total Scenes</span>
+                    <span className="text-white">{nodes.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Rendered Scenes</span>
+                    <span className="text-white">{nodes.filter(n => n.hasVideo).length}/{nodes.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Estimated Size</span>
+                    <span className="text-white font-mono">~{Math.round(nodes.reduce((acc, n) => acc + n.duration, 0) * 2.5)}MB</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 border-t border-white/10 flex items-center justify-between">
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="px-4 py-2 rounded text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+              >
+                Cancel
+              </button>
+              <Button className="bg-white text-black hover:bg-gray-200">
+                <Download className="w-4 h-4 mr-2" />
+                Start Export
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bottom Status Bar */}
+      <div className="h-12 border-t border-white/10 bg-[#1a1a1a] flex items-center px-4 justify-between text-xs text-gray-500">
+        <div className="flex items-center gap-4">
+          <span>{nodes.length} scenes</span>
+          <span>{nodes.reduce((acc, n) => acc + n.duration, 0)}s total</span>
+          <span>{nodes.filter(n => n.hasVideo).length}/{nodes.length} rendered</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-gray-600">Pan: {Math.round(pan.x)}, {Math.round(pan.y)}</span>
+        </div>
       </div>
     </div>
   );

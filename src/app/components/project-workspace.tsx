@@ -1,9 +1,6 @@
 import { Outlet, NavLink, useParams, Link } from "react-router";
 import {
   FileText,
-  Clapperboard,
-  Layout as LayoutIcon,
-  Film,
   Video,
   Download,
   ArrowLeft,
@@ -20,9 +17,6 @@ import { useState } from "react";
 
 const projectNavItems = [
   { path: "scripts", label: "Script Editor", icon: FileText },
-  { path: "scenes", label: "Scene Breakdown", icon: Clapperboard },
-  { path: "storyboard", label: "Storyboard", icon: LayoutIcon },
-  { path: "animation", label: "Scene Animation", icon: Film },
   { path: "editor", label: "Video Editor", icon: Video },
   { path: "exports", label: "Export", icon: Download },
 ];

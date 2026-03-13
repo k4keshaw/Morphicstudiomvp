@@ -1,4 +1,4 @@
-import { Outlet, NavLink } from "react-router";
+import { Outlet, NavLink, useLocation } from "react-router";
 import {
   CreditCard,
   User,
@@ -13,7 +13,6 @@ import {
   ChevronLeft,
 } from "lucide-react";
 import { Button } from "./ui/button";
-import { Link } from "react-router";
 import {
   Tooltip,
   TooltipContent,
@@ -22,6 +21,7 @@ import {
 } from "./ui/tooltip";
 import logo from "figma:asset/bef62a5c6adfaf9bb022e4dac91c5eb3bf5c28fd.png";
 import { useState } from "react";
+import { CreationModeModal } from "./creation-mode-modal";
 
 const workspaceItems = [
   { path: "/", label: "All Projects", icon: Home },
@@ -38,10 +38,16 @@ const learningItems = [
 
 export function Layout() {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   return (
     <TooltipProvider delayDuration={0}>
       <div className="h-screen flex flex-col overflow-hidden bg-[#0f0f0f]">
+        <CreationModeModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+        />
+
         {/* Top Header */}
         <header className="h-14 border-b border-white/5 bg-[#1a1a1a] flex items-center justify-between px-5 gap-4">
           <div className="flex items-center gap-3 flex-shrink-0">
@@ -69,7 +75,10 @@ export function Layout() {
             </div>
 
             {/* Create New Story Button */}
-            <Button className="bg-white text-black hover:bg-gray-200 h-9">
+            <Button
+              onClick={() => setIsCreateModalOpen(true)}
+              className="bg-white text-black hover:bg-gray-200 h-9"
+            >
               <Plus className="w-4 h-4 mr-2" />
               Create New Story
             </Button>

@@ -11,6 +11,7 @@ import {
   List,
 } from "lucide-react";
 import { useState } from "react";
+import { CreationModeModal } from "../components/creation-mode-modal";
 
 const projects = [
   {
@@ -97,9 +98,15 @@ const projects = [
 
 export function Dashboard() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   return (
     <div className="min-h-full">
+      <CreationModeModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+      />
+
       <div className="max-w-7xl mx-auto p-6 space-y-6">
         {/* Quick Start Section - Compact */}
         <div className="space-y-3">
@@ -107,7 +114,10 @@ export function Dashboard() {
             Quick Start
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-            <button className="bg-[#1a1a1a] border border-white/10 rounded p-3 hover:border-white/20 hover:bg-[#202020] transition-all text-left group flex items-center gap-3">
+            <button
+              onClick={() => setIsCreateModalOpen(true)}
+              className="w-full bg-[#1a1a1a] border border-white/10 rounded p-3 hover:border-white/20 hover:bg-[#202020] transition-all text-left group flex items-center gap-3"
+            >
               <div className="w-8 h-8 rounded bg-white/5 flex items-center justify-center flex-shrink-0 group-hover:bg-white/10 transition-colors">
                 <Plus className="w-4 h-4 text-gray-400" />
               </div>
