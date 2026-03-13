@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Save, ZoomIn, ZoomOut, Hand, MousePointer, Type, Plus, Play, Pause, Volume2, Upload, X, Wand2, Image as ImageIcon, Video as VideoIcon, ArrowUpCircle, Palette, RefreshCw } from "lucide-react";
+import { Sparkles, Save, ZoomIn, ZoomOut, Hand, MousePointer, Type, Plus, Play, Pause, Volume2, Upload, X, Wand2, Image as ImageIcon, Video as VideoIcon, ArrowUpCircle, Palette, RefreshCw, Check } from "lucide-react";
 import { Textarea } from "../components/ui/textarea";
 import { Link } from "react-router";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
@@ -14,6 +14,12 @@ interface SceneNode {
   sceneNumber: number;
 }
 
+interface ImageVariant {
+  id: string;
+  imageUrl: string;
+  isFinalized: boolean;
+}
+
 interface ImageNode {
   id: string;
   type: 'image';
@@ -22,6 +28,7 @@ interface ImageNode {
   imageUrl: string;
   prompt: string;
   status: 'generating' | 'complete';
+  variants: ImageVariant[];
 }
 
 interface VideoNode {
@@ -188,16 +195,25 @@ export function ScriptEditor() {
     const scene = nodes.find(n => n.id === sceneId && n.type === 'scene') as SceneNode;
     if (!scene) return;
 
+    // Generate 3 variants
+    const variants: ImageVariant[] = [
+      { id: 'var-1', imageUrl: 'https://images.unsplash.com/photo-1618172193622-ae2d025f4032?w=400', isFinalized: true },
+      { id: 'var-2', imageUrl: 'https://images.unsplash.com/photo-1614732414444-096e5f1122d5?w=400', isFinalized: false },
+      { id: 'var-3', imageUrl: 'https://images.unsplash.com/photo-1543722530-d2c3201371e7?w=400', isFinalized: false },
+    ];
+
     const newImage: ImageNode = {
       id: `image-${Date.now()}`,
       type: 'image',
       sceneId: sceneId,
       position: { x: scene.position.x + 450, y: scene.position.y },
-      imageUrl: 'https://images.unsplash.com/photo-1618172193622-ae2d025f4032?w=400',
+      imageUrl: variants[0].imageUrl,
       prompt: scene.content.substring(0, 200),
       status: 'complete',
+      variants: variants,
     };
     setNodes([...nodes, newImage]);
+    setSelectedNode(newImage);
   };
 
   const generateVideo = (imageId: string) => {
@@ -214,6 +230,43 @@ export function ScriptEditor() {
       status: 'complete',
     };
     setNodes([...nodes, newVideo]);
+  };
+
+  const finalizeVariant = (imageNodeId: string, variantId: string) => {
+    setNodes(nodes.map(n => {
+      if (n.id === imageNodeId && n.type === 'image') {
+        const imageNode = n as ImageNode;
+        const selectedVariant = imageNode.variants.find(v => v.id === variantId);
+        if (selectedVariant) {
+          return {
+            ...imageNode,
+            imageUrl: selectedVariant.imageUrl,
+            variants: imageNode.variants.map(v => ({
+              ...v,
+              isFinalized: v.id === variantId
+            }))
+          };
+        }
+      }
+      return n;
+    }));
+
+    if (selectedNode?.id === imageNodeId) {
+      const updatedNode = nodes.find(n => n.id === imageNodeId) as ImageNode;
+      if (updatedNode) {
+        const selectedVariant = updatedNode.variants.find(v => v.id === variantId);
+        if (selectedVariant) {
+          setSelectedNode({
+            ...updatedNode,
+            imageUrl: selectedVariant.imageUrl,
+            variants: updatedNode.variants.map(v => ({
+              ...v,
+              isFinalized: v.id === variantId
+            }))
+          });
+        }
+      }
+    }
   };
 
   const updateNodeContent = (nodeId: string, content: string) => {
@@ -297,17 +350,17 @@ export function ScriptEditor() {
       </div>
 
       {/* Canvas Area */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Zoom Slider - Left Corner */}
-        <div className="absolute left-4 top-20 z-20 bg-[#1a1a1a] border border-white/10 rounded-lg p-3 flex flex-col items-center gap-2">
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Zoom Slider - Bottom Right Corner - Horizontal */}
+        <div className="absolute right-4 bottom-4 z-20 bg-[#1a1a1a]/90 backdrop-blur-sm border border-white/10 rounded-full px-4 py-2 flex items-center gap-3">
           <button
-            onClick={() => setZoom(Math.min(200, zoom + 25))}
-            className="p-1.5 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+            onClick={() => setZoom(Math.max(25, zoom - 25))}
+            className="p-1 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
           >
-            <ZoomIn className="w-4 h-4" />
+            <ZoomOut className="w-3.5 h-3.5" />
           </button>
           
-          <div className="h-24 flex items-center">
+          <div className="flex items-center gap-2">
             <input
               type="range"
               min="25"
@@ -315,22 +368,22 @@ export function ScriptEditor() {
               step="25"
               value={zoom}
               onChange={(e) => setZoom(Number(e.target.value))}
-              className="w-24 -rotate-90"
+              className="w-24 h-1"
               style={{
                 appearance: 'none',
-                background: 'transparent',
+                background: `linear-gradient(to right, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0.3) ${((zoom - 25) / 175) * 100}%, rgba(255,255,255,0.1) ${((zoom - 25) / 175) * 100}%, rgba(255,255,255,0.1) 100%)`,
+                borderRadius: '2px',
               }}
             />
+            <span className="text-xs text-gray-400 font-mono w-10 text-center">{zoom}%</span>
           </div>
           
           <button
-            onClick={() => setZoom(Math.max(25, zoom - 25))}
-            className="p-1.5 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+            onClick={() => setZoom(Math.min(200, zoom + 25))}
+            className="p-1 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
           >
-            <ZoomOut className="w-4 h-4" />
+            <ZoomIn className="w-3.5 h-3.5" />
           </button>
-          
-          <span className="text-xs text-gray-500 font-mono mt-1">{zoom}%</span>
         </div>
 
         {/* Infinite Canvas */}
@@ -421,11 +474,6 @@ export function ScriptEditor() {
                   onMouseEnter={() => setHoveredNode(node.id)}
                   onMouseLeave={() => setHoveredNode(null)}
                 >
-                  {/* Prompt Display Above */}
-                  <div className="absolute -top-16 left-0 right-0 bg-black/80 backdrop-blur-sm rounded-lg p-2 border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <p className="text-xs text-gray-400 line-clamp-2">{sceneNode.content.substring(0, 100)}...</p>
-                  </div>
-
                   {/* Scene Card */}
                   <div className={`bg-[#1a1a1a] rounded-lg border-2 overflow-hidden cursor-move group ${
                     isSelected ? 'border-white shadow-lg shadow-white/20' : 'border-white/20 hover:border-white/40'
@@ -436,6 +484,29 @@ export function ScriptEditor() {
                         <Type className="w-3.5 h-3.5" />
                         SCENE {sceneNode.sceneNumber}
                       </div>
+                      {/* Generation Icons - Show on Hover */}
+                      {isHovered && (
+                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                          {!hasImage && (
+                            <button
+                              onClick={() => generateImage(node.id)}
+                              className="p-1.5 rounded bg-blue-600 hover:bg-blue-700 text-white transition-all"
+                              title="Generate Image"
+                            >
+                              <ImageIcon className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {hasImage && !getConnectedVideo(hasImage.id) && (
+                            <button
+                              onClick={() => generateVideo(hasImage.id)}
+                              className="p-1.5 rounded bg-purple-600 hover:bg-purple-700 text-white transition-all"
+                              title="Generate Video"
+                            >
+                              <VideoIcon className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Content */}
@@ -455,19 +526,6 @@ export function ScriptEditor() {
                       <span>{sceneNode.content.split('\n').length} lines</span>
                     </div>
                   </div>
-
-                  {/* Action Icons Popup - Shows on Hover */}
-                  {isHovered && !hasImage && (
-                    <div className="absolute -right-14 top-1/2 -translate-y-1/2 flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => generateImage(node.id)}
-                        className="w-10 h-10 rounded-full bg-blue-600 hover:bg-blue-700 flex items-center justify-center text-white shadow-lg transition-all hover:scale-110"
-                        title="Generate Image"
-                      >
-                        <ImageIcon className="w-5 h-5" />
-                      </button>
-                    </div>
-                  )}
                 </div>
               );
             } else if (node.type === 'image') {
@@ -502,10 +560,25 @@ export function ScriptEditor() {
                         <ImageIcon className="w-3.5 h-3.5" />
                         IMAGE
                       </div>
-                      <div className={`px-2 py-0.5 rounded text-xs ${
-                        imageNode.status === 'complete' ? 'bg-green-500/20 text-green-300' : 'bg-yellow-500/20 text-yellow-300'
-                      }`}>
-                        {imageNode.status === 'complete' ? 'Complete' : 'Generating...'}
+                      <div className="flex items-center gap-2">
+                        <div className={`px-2 py-0.5 rounded text-xs ${
+                          imageNode.status === 'complete' ? 'bg-green-500/20 text-green-300' : 'bg-yellow-500/20 text-yellow-300'
+                        }`}>
+                          {imageNode.status === 'complete' ? 'Complete' : 'Generating...'}
+                        </div>
+                        {/* Video Generation Icon on Hover */}
+                        {isHovered && !hasVideo && imageNode.status === 'complete' && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              generateVideo(node.id);
+                            }}
+                            className="p-1 rounded bg-purple-600 hover:bg-purple-700 text-white transition-all"
+                            title="Generate Video"
+                          >
+                            <VideoIcon className="w-3 h-3" />
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -532,19 +605,6 @@ export function ScriptEditor() {
                       </div>
                     )}
                   </div>
-
-                  {/* Action Icons Popup - Generate Video */}
-                  {isHovered && !hasVideo && imageNode.status === 'complete' && (
-                    <div className="absolute -right-14 top-1/2 -translate-y-1/2 flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => generateVideo(node.id)}
-                        className="w-10 h-10 rounded-full bg-purple-600 hover:bg-purple-700 flex items-center justify-center text-white shadow-lg transition-all hover:scale-110"
-                        title="Generate Video"
-                      >
-                        <VideoIcon className="w-5 h-5" />
-                      </button>
-                    </div>
-                  )}
                 </div>
               );
             } else if (node.type === 'video') {
@@ -758,6 +818,35 @@ export function ScriptEditor() {
                     />
                   </div>
 
+                  {/* Image Variants Selection */}
+                  <div>
+                    <label className="text-xs text-gray-500 mb-2 block">Generated Variants</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(selectedNode as ImageNode).variants.map((variant, index) => (
+                        <button
+                          key={variant.id}
+                          onClick={() => finalizeVariant(selectedNode.id, variant.id)}
+                          className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
+                            variant.isFinalized 
+                              ? 'border-green-500 ring-2 ring-green-500/50' 
+                              : 'border-white/20 hover:border-white/40'
+                          }`}
+                        >
+                          <img src={variant.imageUrl} alt={`Variant ${index + 1}`} className="w-full h-full object-cover" />
+                          {variant.isFinalized && (
+                            <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
+                              <Check className="w-3 h-3 text-white" />
+                            </div>
+                          )}
+                          <div className="absolute bottom-1 left-1 bg-black/80 px-1.5 py-0.5 rounded text-xs">
+                            {index + 1}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">Click to select a variant</p>
+                  </div>
+
                   <div>
                     <label className="text-xs text-gray-500 mb-2 block">Status</label>
                     <div className={`inline-flex px-2 py-1 rounded text-xs ${
@@ -781,8 +870,8 @@ export function ScriptEditor() {
                         Change Style
                       </Button>
                       <Button className="w-full h-9 text-xs" variant="outline">
-                        <RefreshCw className="w-3.5 h-3.5 mr-2" />
-                        Regenerate
+                        <Sparkles className="w-3.5 h-3.5 mr-2" />
+                        Generate More Variants
                       </Button>
                     </div>
                   </div>

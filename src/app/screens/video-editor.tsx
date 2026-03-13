@@ -32,8 +32,6 @@ import {
   Pause,
   SkipBack,
   SkipForward,
-  ArrowRight,
-  Settings,
 } from "lucide-react";
 
 interface SceneNode {
@@ -59,6 +57,7 @@ interface SceneNode {
   saturation: number;
   visible: boolean;
   locked: boolean;
+  startTime: number; // Add start time for timeline
 }
 
 type CanvasNode = SceneNode;
@@ -72,6 +71,7 @@ const initialNodes: CanvasNode[] = [
     description: "Wide establishing shot of futuristic space station",
     scriptContent: "INT. SPACE STATION - COMMAND CENTER - DAY\n\nThe vast command center hums with activity. Holographic displays flicker with data streams.",
     duration: 8,
+    startTime: 0,
     position: { x: 100, y: 150 },
     thumbnail: "https://images.unsplash.com/photo-1618172193622-ae2d025f4032?w=400",
     hasImage: true,
@@ -96,6 +96,7 @@ const initialNodes: CanvasNode[] = [
     description: "Close-up of Commander Sarah Chen studying readings",
     scriptContent: "COMMANDER SARAH CHEN stands at the central console.\n\nSARAH\n(to herself)\nThis doesn't make any sense...",
     duration: 6,
+    startTime: 8,
     position: { x: 500, y: 150 },
     thumbnail: "https://images.unsplash.com/photo-1618172193622-ae2d025f4032?w=400",
     hasImage: true,
@@ -120,6 +121,7 @@ const initialNodes: CanvasNode[] = [
     description: "Tech Officer Marcus rushes over with tablet",
     scriptContent: "TECH OFFICER MARCUS rushes over.\n\nMARCUS\nCommander, you need to see this.",
     duration: 7,
+    startTime: 14,
     position: { x: 900, y: 150 },
     thumbnail: "https://images.unsplash.com/photo-1618172193622-ae2d025f4032?w=400",
     hasImage: false,
@@ -140,7 +142,7 @@ const initialNodes: CanvasNode[] = [
 
 export function VideoEditor() {
   const [nodes, setNodes] = useState<CanvasNode[]>(initialNodes);
-  const [selectedNode, setSelectedNode] = useState<CanvasNode | null>(null);
+  const [selectedNode, setSelectedNode] = useState<CanvasNode | null>(nodes[0]);
   const [tool, setTool] = useState<'select' | 'pan'>('select');
   const [zoom, setZoom] = useState(100);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -150,7 +152,10 @@ export function VideoEditor() {
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [showExportModal, setShowExportModal] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
   const canvasRef = useRef<HTMLDivElement>(null);
+
+  const totalDuration = nodes.reduce((acc, n) => acc + n.duration, 0);
 
   // Ctrl+Scroll Zoom
   useEffect(() => {
@@ -175,6 +180,7 @@ export function VideoEditor() {
       const node = nodes.find(n => n.id === nodeId);
       if (node) {
         setSelectedNode(node);
+        setCurrentTime(node.startTime);
         setDraggingNode(nodeId);
         setDragOffset({
           x: e.clientX - node.position.x * (zoom / 100) - pan.x,
@@ -188,8 +194,6 @@ export function VideoEditor() {
     if (tool === 'pan' || e.button === 1) {
       setIsPanning(true);
       setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
-    } else {
-      setSelectedNode(null);
     }
   };
 
@@ -221,6 +225,7 @@ export function VideoEditor() {
 
   const addSceneNode = () => {
     const maxScene = Math.max(...nodes.map(n => n.sceneNumber), 0);
+    const lastStartTime = nodes[nodes.length - 1]?.startTime + nodes[nodes.length - 1]?.duration || 0;
     const newScene: SceneNode = {
       id: `scene-${Date.now()}`,
       type: 'scene',
@@ -229,6 +234,7 @@ export function VideoEditor() {
       description: "New scene description...",
       scriptContent: "NEW SCENE\n\nScene content from script editor...",
       duration: 5,
+      startTime: lastStartTime,
       position: { x: 100 + nodes.length * 400, y: 150 },
       thumbnail: "https://images.unsplash.com/photo-1618172193622-ae2d025f4032?w=400",
       hasImage: false,
@@ -259,6 +265,12 @@ export function VideoEditor() {
     if (selectedNode?.id === nodeId) {
       setSelectedNode({ ...selectedNode, [property]: value } as SceneNode);
     }
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -328,59 +340,131 @@ export function VideoEditor() {
       <div className="flex-1 flex overflow-hidden">
         {/* Left Side - Canvas */}
         <div className="flex-1 flex flex-col">
-          {/* Video Preview Window */}
-          <div className="h-64 border-b border-white/10 bg-black flex items-center justify-center relative">
-            {selectedNode && selectedNode.hasVideo ? (
-              <img 
-                src={selectedNode.thumbnail} 
-                alt="Preview" 
-                className="max-h-full max-w-full object-contain"
-                style={{
-                  opacity: selectedNode.opacity / 100,
-                  transform: `scale(${selectedNode.scale / 100}) rotate(${selectedNode.rotation}deg)`,
-                  filter: `blur(${selectedNode.blur}px) brightness(${selectedNode.brightness}%) contrast(${selectedNode.contrast}%) saturate(${selectedNode.saturation}%)`,
-                }}
-              />
-            ) : (
-              <div className="text-center">
-                <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-3">
-                  <Film className="w-8 h-8 text-gray-600" />
+          {/* Video Preview Window - Always Visible */}
+          <div className="h-72 border-b border-white/10 bg-black flex flex-col">
+            {/* Preview Display */}
+            <div className="flex-1 flex items-center justify-center relative">
+              {selectedNode ? (
+                <img 
+                  src={selectedNode.thumbnail} 
+                  alt="Preview" 
+                  className="max-h-full max-w-full object-contain"
+                  style={{
+                    opacity: selectedNode.opacity / 100,
+                    transform: `scale(${selectedNode.scale / 100}) rotate(${selectedNode.rotation}deg)`,
+                    filter: `blur(${selectedNode.blur}px) brightness(${selectedNode.brightness}%) contrast(${selectedNode.contrast}%) saturate(${selectedNode.saturation}%)`,
+                  }}
+                />
+              ) : (
+                <div className="text-center">
+                  <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-3">
+                    <Film className="w-8 h-8 text-gray-600" />
+                  </div>
+                  <p className="text-sm text-gray-600">No scene selected</p>
                 </div>
-                <p className="text-sm text-gray-600">Select a scene to preview</p>
-              </div>
-            )}
+              )}
 
-            {/* Preview Controls */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-sm rounded-lg px-4 py-2 flex items-center gap-3">
-              <button className="p-1.5 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
-                <SkipBack className="w-4 h-4" />
-              </button>
-              <button 
-                onClick={() => setIsPlaying(!isPlaying)}
-                className="p-2 rounded-full bg-white hover:bg-gray-200 text-black transition-colors"
-              >
-                {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
-              </button>
-              <button className="p-1.5 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
-                <SkipForward className="w-4 h-4" />
-              </button>
-              <div className="h-4 w-px bg-white/20 mx-1" />
-              <span className="text-xs text-gray-400 font-mono">00:00 / 00:21</span>
+              {/* Scene Info Overlay */}
+              {selectedNode && (
+                <div className="absolute top-4 left-4 bg-black/80 backdrop-blur-sm rounded-lg px-3 py-2 border border-white/10">
+                  <p className="text-xs text-white font-semibold">{selectedNode.title}</p>
+                  <p className="text-xs text-gray-400">Scene {selectedNode.sceneNumber}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Timeline & Controls */}
+            <div className="bg-[#1a1a1a] border-t border-white/10 p-4">
+              {/* Timeline Bar */}
+              <div className="mb-3 relative">
+                <div className="h-2 bg-black/50 rounded-full overflow-hidden">
+                  {/* Timeline segments */}
+                  <div className="absolute inset-0 flex">
+                    {nodes.map((node, index) => (
+                      <div
+                        key={node.id}
+                        className={`h-full transition-all cursor-pointer ${
+                          selectedNode?.id === node.id ? 'bg-blue-500' : 'bg-gray-600 hover:bg-gray-500'
+                        }`}
+                        style={{ 
+                          width: `${(node.duration / totalDuration) * 100}%`,
+                        }}
+                        onClick={() => {
+                          setSelectedNode(node);
+                          setCurrentTime(node.startTime);
+                        }}
+                      />
+                    ))}
+                  </div>
+                  {/* Playhead */}
+                  <div 
+                    className="absolute top-0 bottom-0 w-0.5 bg-white shadow-lg"
+                    style={{ left: `${(currentTime / totalDuration) * 100}%` }}
+                  >
+                    <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-white rounded-full" />
+                  </div>
+                </div>
+                {/* Time markers */}
+                <div className="flex justify-between mt-1 text-xs text-gray-500 font-mono">
+                  {nodes.map((node, index) => (
+                    <span key={node.id} style={{ width: `${(node.duration / totalDuration) * 100}%` }}>
+                      {formatTime(node.startTime)}
+                    </span>
+                  ))}
+                  <span>{formatTime(totalDuration)}</span>
+                </div>
+              </div>
+
+              {/* Playback Controls */}
+              <div className="flex items-center justify-center gap-3">
+                <button 
+                  onClick={() => {
+                    const prevNode = nodes[Math.max(0, (selectedNode ? nodes.indexOf(selectedNode) - 1 : 0))];
+                    if (prevNode) {
+                      setSelectedNode(prevNode);
+                      setCurrentTime(prevNode.startTime);
+                    }
+                  }}
+                  className="p-1.5 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                >
+                  <SkipBack className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => setIsPlaying(!isPlaying)}
+                  className="p-2 rounded-full bg-white hover:bg-gray-200 text-black transition-colors"
+                >
+                  {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+                </button>
+                <button 
+                  onClick={() => {
+                    const nextNode = nodes[Math.min(nodes.length - 1, (selectedNode ? nodes.indexOf(selectedNode) + 1 : 0))];
+                    if (nextNode) {
+                      setSelectedNode(nextNode);
+                      setCurrentTime(nextNode.startTime);
+                    }
+                  }}
+                  className="p-1.5 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                >
+                  <SkipForward className="w-4 h-4" />
+                </button>
+                <div className="h-4 w-px bg-white/20 mx-1" />
+                <span className="text-xs text-gray-400 font-mono">{formatTime(currentTime)} / {formatTime(totalDuration)}</span>
+              </div>
             </div>
           </div>
 
           {/* Canvas Timeline Area */}
           <div className="flex-1 relative">
-            {/* Zoom Slider - Left Corner */}
-            <div className="absolute left-4 top-4 z-20 bg-[#1a1a1a] border border-white/10 rounded-lg p-3 flex flex-col items-center gap-2">
+            {/* Zoom Slider - Bottom Right Corner - Horizontal */}
+            <div className="absolute right-4 bottom-4 z-20 bg-[#1a1a1a]/90 backdrop-blur-sm border border-white/10 rounded-full px-4 py-2 flex items-center gap-3">
               <button
-                onClick={() => setZoom(Math.min(200, zoom + 25))}
-                className="p-1.5 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                onClick={() => setZoom(Math.max(25, zoom - 25))}
+                className="p-1 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
               >
-                <ZoomIn className="w-4 h-4" />
+                <ZoomOut className="w-3.5 h-3.5" />
               </button>
               
-              <div className="h-24 flex items-center">
+              <div className="flex items-center gap-2">
                 <input
                   type="range"
                   min="25"
@@ -388,22 +472,22 @@ export function VideoEditor() {
                   step="25"
                   value={zoom}
                   onChange={(e) => setZoom(Number(e.target.value))}
-                  className="w-24 -rotate-90"
+                  className="w-24 h-1"
                   style={{
                     appearance: 'none',
-                    background: 'transparent',
+                    background: `linear-gradient(to right, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0.3) ${((zoom - 25) / 175) * 100}%, rgba(255,255,255,0.1) ${((zoom - 25) / 175) * 100}%, rgba(255,255,255,0.1) 100%)`,
+                    borderRadius: '2px',
                   }}
                 />
+                <span className="text-xs text-gray-400 font-mono w-10 text-center">{zoom}%</span>
               </div>
               
               <button
-                onClick={() => setZoom(Math.max(25, zoom - 25))}
-                className="p-1.5 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                onClick={() => setZoom(Math.min(200, zoom + 25))}
+                className="p-1 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
               >
-                <ZoomOut className="w-4 h-4" />
+                <ZoomIn className="w-3.5 h-3.5" />
               </button>
-              
-              <span className="text-xs text-gray-500 font-mono mt-1">{zoom}%</span>
             </div>
 
             {/* Infinite Canvas */}
@@ -482,7 +566,7 @@ export function VideoEditor() {
                   >
                     {/* Scene Storyboard Card */}
                     <div className={`w-80 bg-[#1a1a1a] rounded-lg border-2 overflow-hidden cursor-move ${
-                      isSelected ? 'border-white shadow-lg shadow-white/20' : 'border-white/20 hover:border-white/40'
+                      isSelected ? 'border-blue-500 shadow-lg shadow-blue-500/20' : 'border-white/20 hover:border-white/40'
                     } ${node.locked ? 'opacity-75' : ''}`}>
                       {/* Script Reference - Inside Card at Top */}
                       <div className="bg-black/40 border-b border-white/10 px-3 py-2">
@@ -493,7 +577,6 @@ export function VideoEditor() {
 
                       {/* Storyboard Sketch Frame */}
                       <div className="h-44 bg-black relative overflow-hidden border-b border-white/10">
-                        {/* Sketch Image */}
                         <img
                           src={node.thumbnail}
                           alt={node.title}
@@ -503,7 +586,6 @@ export function VideoEditor() {
                           }}
                         />
                         
-                        {/* Overlay Text */}
                         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
                         <div className="absolute bottom-2 left-2 right-2">
                           <p className="text-xs text-white/90 font-medium leading-tight line-clamp-1">
@@ -511,12 +593,10 @@ export function VideoEditor() {
                           </p>
                         </div>
                         
-                        {/* Frame Number Badge */}
                         <div className="absolute top-2 right-2 bg-black/80 backdrop-blur-sm px-2 py-1 rounded text-xs font-mono text-white/70">
                           #{node.sceneNumber}
                         </div>
 
-                        {/* Layer Status Icons */}
                         <div className="absolute top-2 left-2 flex gap-1">
                           {!node.visible && (
                             <div className="w-6 h-6 rounded bg-white/10 backdrop-blur-sm flex items-center justify-center">
@@ -538,11 +618,10 @@ export function VideoEditor() {
                             <p className="text-sm font-semibold text-white truncate">
                               {node.title}
                             </p>
-                            <p className="text-xs text-gray-500">{node.duration}s</p>
+                            <p className="text-xs text-gray-500">{node.duration}s • {formatTime(node.startTime)}</p>
                           </div>
                         </div>
 
-                        {/* Status Indicators */}
                         <div className="flex items-center gap-2 text-xs">
                           <div className="flex items-center gap-1.5">
                             <div className={`w-2 h-2 rounded-full ${node.hasImage ? 'bg-green-500' : 'bg-gray-600'}`} />
@@ -774,7 +853,6 @@ export function VideoEditor() {
       {showExportModal && (
         <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-[#1a1a1a] rounded-lg border border-white/10 w-full max-w-2xl max-h-[90vh] overflow-auto">
-            {/* Header */}
             <div className="p-6 border-b border-white/10 flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold mb-1">Export Video</h2>
@@ -788,9 +866,7 @@ export function VideoEditor() {
               </button>
             </div>
 
-            {/* Content */}
             <div className="p-6 space-y-6">
-              {/* Export Settings */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm text-gray-400 mb-2 block">Resolution</label>
@@ -850,13 +926,12 @@ export function VideoEditor() {
                 </div>
               </div>
 
-              {/* Export Preview */}
               <div className="bg-black/30 rounded-lg p-4 border border-white/10">
                 <h3 className="text-sm font-semibold mb-3">Export Summary</h3>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-500">Total Duration</span>
-                    <span className="text-white font-mono">{nodes.reduce((acc, n) => acc + n.duration, 0)}s</span>
+                    <span className="text-white font-mono">{formatTime(totalDuration)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Total Scenes</span>
@@ -868,13 +943,12 @@ export function VideoEditor() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Estimated Size</span>
-                    <span className="text-white font-mono">~{Math.round(nodes.reduce((acc, n) => acc + n.duration, 0) * 2.5)}MB</span>
+                    <span className="text-white font-mono">~{Math.round(totalDuration * 2.5)}MB</span>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Footer */}
             <div className="p-6 border-t border-white/10 flex items-center justify-between">
               <button
                 onClick={() => setShowExportModal(false)}
@@ -895,7 +969,7 @@ export function VideoEditor() {
       <div className="h-12 border-t border-white/10 bg-[#1a1a1a] flex items-center px-4 justify-between text-xs text-gray-500">
         <div className="flex items-center gap-4">
           <span>{nodes.length} scenes</span>
-          <span>{nodes.reduce((acc, n) => acc + n.duration, 0)}s total</span>
+          <span>{formatTime(totalDuration)} total</span>
           <span>{nodes.filter(n => n.hasVideo).length}/{nodes.length} rendered</span>
         </div>
         <div className="flex items-center gap-2">
