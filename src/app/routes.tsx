@@ -1,5 +1,6 @@
 import { createBrowserRouter } from "react-router";
 import { Layout } from "./components/layout";
+import { ProjectWorkspace } from "./components/project-workspace";
 import { Dashboard } from "./screens/dashboard";
 import { ScriptEditor } from "./screens/script-editor";
 import { SceneBreakdown } from "./screens/scene-breakdown";
@@ -15,13 +16,19 @@ export const router = createBrowserRouter([
     Component: Layout,
     children: [
       { index: true, Component: Dashboard },
+      { path: "settings", Component: Settings },
+    ],
+  },
+  {
+    path: "/project/:projectId",
+    Component: ProjectWorkspace,
+    children: [
       { path: "scripts", Component: ScriptEditor },
       { path: "scenes", Component: SceneBreakdown },
       { path: "storyboard", Component: StoryboardGenerator },
       { path: "animation", Component: SceneAnimation },
       { path: "editor", Component: VideoEditor },
       { path: "exports", Component: ExportScreen },
-      { path: "settings", Component: Settings },
     ],
   },
 ]);

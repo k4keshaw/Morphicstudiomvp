@@ -1,91 +1,62 @@
 import { Outlet, NavLink } from "react-router";
 import {
-  LayoutDashboard,
-  FileText,
-  Clapperboard,
-  Layout as LayoutIcon,
-  Film,
-  Video,
-  Download,
-  Settings as SettingsIcon,
   CreditCard,
   User,
+  Plus,
+  Search,
 } from "lucide-react";
 import { Button } from "./ui/button";
+import { Link } from "react-router";
 import logo from "figma:asset/bef62a5c6adfaf9bb022e4dac91c5eb3bf5c28fd.png";
-
-const navItems = [
-  { path: "/", label: "Dashboard", icon: LayoutDashboard },
-  { path: "/scripts", label: "Scripts", icon: FileText },
-  { path: "/scenes", label: "Scenes", icon: Clapperboard },
-  { path: "/storyboard", label: "Storyboard", icon: LayoutIcon },
-  { path: "/animation", label: "Scene Animation", icon: Film },
-  { path: "/editor", label: "Video Editor", icon: Video },
-  { path: "/exports", label: "Exports", icon: Download },
-  { path: "/settings", label: "Settings", icon: SettingsIcon },
-];
 
 export function Layout() {
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
+    <div className="h-screen flex flex-col overflow-hidden bg-[#0f0f0f]">
       {/* Top Header */}
-      <header className="h-14 border-b border-white/5 bg-[#1a1a1a] flex items-center justify-between px-5">
-        <div className="flex items-center gap-3">
+      <header className="h-14 border-b border-white/5 bg-[#1a1a1a] flex items-center justify-between px-5 gap-4">
+        <div className="flex items-center gap-3 flex-shrink-0">
           <img src={logo} alt="Morphic Studio" className="h-7" />
         </div>
 
-        <div className="flex items-center gap-5">
-          {/* Credits */}
-          <div className="flex items-center gap-2 px-3 py-1 rounded bg-white/5">
-            <CreditCard className="w-3.5 h-3.5 text-gray-500" />
-            <span className="text-sm font-medium">2,450</span>
+        {/* Search Bar */}
+        <div className="flex-1 max-w-md">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search projects..."
+              className="w-full h-9 bg-white/5 border border-white/10 rounded px-3 pl-9 text-sm placeholder:text-gray-600 focus:outline-none focus:border-white/20 transition-colors"
+            />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
           </div>
+        </div>
+
+        <div className="flex items-center gap-3 flex-shrink-0">
+          {/* Credits */}
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-white/5 border border-white/10">
+            <CreditCard className="w-3.5 h-3.5 text-gray-400" />
+            <span className="text-sm font-medium">2,450</span>
+            <span className="text-xs text-gray-500">credits</span>
+          </div>
+
+          {/* Create New Story Button */}
+          <Button className="bg-white text-black hover:bg-gray-200 h-9">
+            <Plus className="w-4 h-4 mr-2" />
+            Create New Story
+          </Button>
 
           {/* User */}
           <div className="flex items-center gap-2">
-            <div className="text-right">
-              <p className="text-sm font-medium">Alex Morgan</p>
-            </div>
-            <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/15 cursor-pointer transition-colors">
               <User className="w-4 h-4 text-gray-400" />
             </div>
           </div>
         </div>
       </header>
 
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar */}
-        <aside className="w-56 border-r border-white/5 bg-[#1a1a1a] flex flex-col">
-          {/* Navigation */}
-          <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  end={item.path === "/"}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-3 py-2 rounded transition-all ${
-                      isActive
-                        ? "bg-white/10 text-white"
-                        : "text-gray-400 hover:bg-white/5 hover:text-gray-300"
-                    }`
-                  }
-                >
-                  <Icon className="w-4 h-4" />
-                  <span className="text-sm">{item.label}</span>
-                </NavLink>
-              );
-            })}
-          </nav>
-        </aside>
-
-        {/* Main Content */}
-        <main className="flex-1 overflow-auto bg-[#0f0f0f]">
-          <Outlet />
-        </main>
-      </div>
+      {/* Main Content */}
+      <main className="flex-1 overflow-auto">
+        <Outlet />
+      </main>
     </div>
   );
 }
