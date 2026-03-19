@@ -157,14 +157,12 @@ export function VideoEditor() {
 
   const totalDuration = nodes.reduce((acc, n) => acc + n.duration, 0);
 
-  // Ctrl+Scroll Zoom
+  // Scroll Zoom (simple scroll without Ctrl)
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
-      if (e.ctrlKey) {
-        e.preventDefault();
-        const delta = e.deltaY > 0 ? -25 : 25;
-        setZoom(prev => Math.max(25, Math.min(200, prev + delta)));
-      }
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -10 : 10;
+      setZoom(prev => Math.max(25, Math.min(200, prev + delta)));
     };
 
     const canvas = canvasRef.current;

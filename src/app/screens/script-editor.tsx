@@ -85,13 +85,6 @@ const initialNodes: CanvasNode[] = [
     content: 'TECH OFFICER MARCUS (20s, eager, nervous) rushes over with a tablet.\n\nMARCUS\nCommander, you need to see this. The signal... it\'s not random. It\'s a pattern.',
     position: { x: 100, y: 700 }
   },
-  {
-    id: 'audio-1',
-    type: 'audio',
-    position: { x: 600, y: 300 },
-    voiceModel: 'elevenlabs',
-    isGenerated: false,
-  }
 ];
 
 export function ScriptEditor() {
@@ -111,15 +104,15 @@ export function ScriptEditor() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioProgress, setAudioProgress] = useState(0);
   const [volume, setVolume] = useState(80);
+  const [audioGenerated, setAudioGenerated] = useState(false);
+  const [voiceModel, setVoiceModel] = useState('elevenlabs');
 
-  // Ctrl+Scroll Zoom
+  // Scroll Zoom (simple scroll without Ctrl)
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
-      if (e.ctrlKey) {
-        e.preventDefault();
-        const delta = e.deltaY > 0 ? -25 : 25;
-        setZoom(prev => Math.max(25, Math.min(200, prev + delta)));
-      }
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -10 : 10;
+      setZoom(prev => Math.max(25, Math.min(200, prev + delta)));
     };
 
     const canvas = canvasRef.current;
@@ -950,16 +943,86 @@ export function ScriptEditor() {
         )}
       </div>
 
-      {/* Bottom Status Bar */}
-      <div className="h-12 border-t border-white/10 bg-[#1a1a1a] flex items-center px-4 justify-between text-xs text-gray-500">
-        <div className="flex items-center gap-4">
-          <span>{nodes.filter(n => n.type === 'scene').length} scenes</span>
-          <span>{nodes.filter(n => n.type === 'image').length} images</span>
-          <span>{nodes.filter(n => n.type === 'video').length} videos</span>
-          <span>{nodes.filter(n => n.type === 'audio').length} audio</span>
+      {/* Bottom Audio Player Footer */}
+      <div className="h-16 border-t border-white/10 bg-[#1a1a1a] flex items-center px-4 gap-6">
+        {/* Left: Voice Model Selection */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 text-cyan-400">
+            <Volume2 className="w-4 h-4" />
+            <span className="text-xs font-semibold">Voiceover</span>
+          </div>
+          <Select value={voiceModel} onValueChange={setVoiceModel}>
+            <SelectTrigger className="h-8 w-44 bg-white/5 border-white/10 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="elevenlabs">ElevenLabs - Professional</SelectItem>
+              <SelectItem value="elevenlabs-cinematic">ElevenLabs - Cinematic</SelectItem>
+              <SelectItem value="elevenlabs-narrator">ElevenLabs - Narrator</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-gray-600">Pan: {Math.round(pan.x)}, {Math.round(pan.y)}</span>
+
+        {/* Center: Player Controls */}
+        <div className="flex-1 flex items-center gap-3">
+          <button 
+            onClick={() => setIsPlaying(!isPlaying)}
+            className="p-2 rounded-full bg-cyan-600 hover:bg-cyan-700 text-white transition-colors"
+          >
+            {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+          </button>
+
+          {/* Waveform / Progress Bar */}
+          <div className="flex-1 h-8 bg-black/30 rounded-lg overflow-hidden flex items-center px-2">
+            {audioGenerated ? (
+              <div className="flex items-center gap-0.5 h-full flex-1">
+                {Array.from({ length: 60 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={`flex-1 rounded-full transition-all ${
+                      i < audioProgress * 60 / 100 ? 'bg-cyan-500' : 'bg-cyan-500/30'
+                    }`}
+                    style={{ height: `${Math.random() * 60 + 20}%` }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <span className="text-xs text-gray-500 flex-1 text-center">No audio generated</span>
+            )}
+          </div>
+
+          <span className="text-xs text-gray-500 font-mono w-20 text-right">00:00 / 00:21</span>
+        </div>
+
+        {/* Right: Generate & Volume */}
+        <div className="flex items-center gap-3">
+          {!audioGenerated && (
+            <Button
+              onClick={() => setAudioGenerated(true)}
+              className="bg-cyan-600 hover:bg-cyan-700 h-9 text-xs"
+            >
+              <Sparkles className="w-3 h-3 mr-2" />
+              Generate Audio
+            </Button>
+          )}
+          
+          <div className="flex items-center gap-2">
+            <Volume2 className="w-4 h-4 text-gray-500" />
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={volume}
+              onChange={(e) => setVolume(Number(e.target.value))}
+              className="w-20 h-1"
+              style={{
+                appearance: 'none',
+                background: `linear-gradient(to right, rgba(34,211,238,0.6) 0%, rgba(34,211,238,0.6) ${volume}%, rgba(255,255,255,0.1) ${volume}%, rgba(255,255,255,0.1) 100%)`,
+                borderRadius: '2px',
+              }}
+            />
+            <span className="text-xs text-gray-500 w-8">{volume}%</span>
+          </div>
         </div>
       </div>
     </div>
